@@ -1,11 +1,10 @@
 // netlify/functions/groq-generate.js
-// TEMPORARY: Hardcoded API key to confirm it works
+// AI Report Generation using Groq API - Working with llama-3.1 model
 
-// IMPORTANT: Replace this with your actual Groq API key
-const GROQ_API_KEY = 'gsk_YOUR_ACTUAL_GROQ_API_KEY_HERE';
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 exports.handler = async (event) => {
-    // Handle CORS preflight
+    // Handle CORS preflight request
     if (event.httpMethod === 'OPTIONS') {
         return {
             statusCode: 204,
@@ -17,6 +16,7 @@ exports.handler = async (event) => {
         };
     }
 
+    // Only allow POST requests
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
@@ -36,8 +36,7 @@ exports.handler = async (event) => {
             };
         }
         
-        console.log('Calling Groq API with key length:', GROQ_API_KEY ? GROQ_API_KEY.length : 0);
-        
+        // Call Groq API with current working model
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: {
@@ -45,9 +44,12 @@ exports.handler = async (event) => {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: 'mixtral-8x7b-32768',
+                model: 'llama-3.1-70b-versatile',
                 messages: [
-                    { role: 'system', content: 'You are a professional academic report writer. Generate internship reports with proper HTML formatting using h2 for chapters, h3 for subheadings, p for paragraphs, ul/li for lists. Never mention AI.' },
+                    { 
+                        role: 'system', 
+                        content: 'You are a professional academic report writer. Generate internship reports with proper HTML formatting using h2 for chapters, h3 for subheadings, p for paragraphs, ul/li for lists. Use formal academic English. Never mention that you are AI.' 
+                    },
                     { role: 'user', content: prompt }
                 ],
                 temperature: 0.7,
@@ -57,18 +59,31 @@ exports.handler = async (event) => {
         
         const data = await response.json();
         
+        // Check for errors
+        if (data.error) {
+            console.error('Groq API Error:', data.error);
+            return {
+                statusCode: 500,
+                headers: { 'Access-Control-Allow-Origin': '*' },
+                body: JSON.stringify({ success: false, error: data.error.message })
+            };
+        }
+        
+        // Return successful response
         if (data.choices && data.choices[0] && data.choices[0].message) {
             return {
                 statusCode: 200,
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ success: true, content: data.choices[0].message.content })
+                body: JSON.stringify({ 
+                    success: true, 
+                    content: data.choices[0].message.content 
+                })
             };
         } else {
-            console.error('Groq API error:', data);
             return {
                 statusCode: 500,
                 headers: { 'Access-Control-Allow-Origin': '*' },
-                body: JSON.stringify({ success: false, error: data.error?.message || 'AI generation failed' })
+                body: JSON.stringify({ success: false, error: 'No response from AI' })
             };
         }
     } catch (error) {
